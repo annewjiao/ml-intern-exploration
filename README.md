@@ -339,6 +339,40 @@ The agent emits the following events via `event_queue`:
 - `undo_complete` - Undo operation completed
 - `shutdown` - Agent shutting down
 
+## Process Logging
+
+Every session is automatically logged to `process_logs/` in your working directory. Each file is a timestamped JSONL capturing the full story: what the agent tried, why, and what it changed.
+
+### Viewing logs
+
+Use the `ml-intern-logs` command (installed alongside `ml-intern`):
+
+```bash
+ml-intern-logs              # latest session
+ml-intern-logs --all        # all sessions, newest first
+ml-intern-logs --cost       # cost and token summary per session
+ml-intern-logs --file process_logs/session_20260609_143022_12345.jsonl  # specific file
+ml-intern-logs --raw        # include internal events (llm_call, ready, etc.)
+```
+
+### Log format
+
+Each line is a JSON object:
+
+```json
+{"ts": "2026-06-09T14:30:22.123Z", "event": "tool_call", "summary": "Tool call → bash({\"cmd\": \"ls\"})", "data": {...}}
+```
+
+Key event types in the story view:
+
+| Event | Meaning |
+|---|---|
+| `→` | Tool the agent called |
+| `✓` | Tool succeeded |
+| `✗` | Tool failed or returned an error |
+| `💭` | Agent's reasoning between steps |
+| `✔ Turn complete` | Agent finished the turn |
+
 ## Development
 
 ### Pre-commit Checks

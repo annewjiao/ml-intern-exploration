@@ -18,6 +18,9 @@ venv/
 ENV/
 env/
 
+# Process logs
+process_logs/
+
 # Environment and Secrets
 .env
 .env.local

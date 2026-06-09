@@ -55,6 +55,7 @@ all = [
 
 [project.scripts]
 ml-intern = "agent.main:cli"
+ml-intern-logs = "agent.utils.log_viewer:main"
 
 [build-system]
 requires = ["setuptools>=64"]

@@ -32,6 +32,7 @@ from agent.core.model_ids import strip_huggingface_model_prefix
 from agent.core.session import OpType
 from agent.core.tools import ToolRouter
 from agent.messaging.gateway import NotificationGateway
+from agent.utils.process_logger import ProcessLogger, TeeQueue, make_log_path
 from agent.utils.reliability_checks import check_training_script_save_pattern
 from agent.utils.terminal_display import (
     get_console,
@@ -1195,7 +1196,9 @@ async def main(model: str | None = None, sandbox_tools: bool = False):
 
     # Create queues for communication
     submission_queue = asyncio.Queue()
-    event_queue = asyncio.Queue()
+    _process_logger = ProcessLogger(make_log_path())
+    _process_logger.open()
+    event_queue = TeeQueue(_process_logger)
 
     # Events to signal agent state
     turn_complete_event = asyncio.Event()
@@ -1357,6 +1360,7 @@ async def main(model: str | None = None, sandbox_tools: bool = False):
 
             # Submit to agent
             submission_id[0] += 1
+            _process_logger.write_event("user_input", {"text": user_input})
             submission = Submission(
                 id=f"sub_{submission_id[0]}",
                 operation=Operation(
@@ -1393,6 +1397,7 @@ async def main(model: str | None = None, sandbox_tools: bool = False):
 
     # Now safe to cancel the listener (agent is done emitting events)
     listener_task.cancel()
+    _process_logger.close()
 
     get_console().print("\n[dim]Bye.[/dim]\n")
 
@@ -1448,7 +1453,9 @@ async def headless_main(
     print("---", file=sys.stderr)
 
     submission_queue: asyncio.Queue = asyncio.Queue()
-    event_queue: asyncio.Queue = asyncio.Queue()
+    _process_logger = ProcessLogger(make_log_path())
+    _process_logger.open()
+    event_queue = TeeQueue(_process_logger)
 
     tool_router = ToolRouter(
         config.mcpServers, hf_token=hf_token, local_mode=local_mode
@@ -1479,6 +1486,7 @@ async def headless_main(
             break
 
     # Submit the prompt
+    _process_logger.write_event("user_input", {"text": prompt})
     submission = Submission(
         id="sub_1",
         operation=Operation(op_type=OpType.USER_INPUT, data={"text": prompt}),
@@ -1626,6 +1634,7 @@ async def headless_main(
         await tool_router.__aexit__(None, None, None)
     finally:
         await notification_gateway.close()
+        _process_logger.close()
 
 
 def cli():
@@ -1641,7 +1650,19 @@ def cli():
     # Suppress whoosh invalid escape sequence warnings (third-party, unfixed upstream)
     warnings.filterwarnings("ignore", category=SyntaxWarning, module="whoosh")
 
-    parser = argparse.ArgumentParser(description="Hugging Face Agent CLI")
+    parser = argparse.ArgumentParser(
+        description="Hugging Face Agent CLI",
+        epilog=(
+            "Process logs are written to process_logs/ automatically.\n"
+            "Use 'ml-intern-logs' to view them:\n"
+            "  ml-intern-logs              # latest session\n"
+            "  ml-intern-logs --all        # all sessions\n"
+            "  ml-intern-logs --cost       # cost/token summary\n"
+            "  ml-intern-logs --file PATH  # specific log file\n"
+            "  ml-intern-logs --raw        # include internal events"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "prompt", nargs="?", default=None, help="Run headlessly with this prompt"
     )
